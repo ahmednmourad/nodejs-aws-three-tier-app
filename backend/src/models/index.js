@@ -1,5 +1,7 @@
 import { Sequelize } from "sequelize"
 import config from "../config/index.js"
+import User from "./user.model.js"
+import Token from "./token.model.js"
 
 const dbOptions = {
   port: config.db.port,
@@ -19,6 +21,8 @@ const sequelize = new Sequelize(
 const db = {
   sequelize,
   Sequelize,
+  User: User(sequelize, Sequelize),
+  Token: Token(sequelize, Sequelize),
 }
 
 export default db
