@@ -1,0 +1,50 @@
+{
+  "root": true,
+  "parserOptions": {
+    "ecmaVersion": "latest",
+    "sourceType": "module"
+  },
+  "plugins": ["prettier"],
+  "extends": ["eslint:recommended", "standard", "prettier"],
+  "env": {
+    "node": true,
+    "jest": true
+  },
+  "rules": {
+    "quotes": ["error", "double"],
+    "max-len": [
+      "error",
+      {
+        "code": 160,
+        "tabWidth": 2,
+        "ignoreComments": true,
+        "ignoreTrailingComments": true,
+        "ignoreUrls": true,
+        "ignoreStrings": true,
+        "ignoreTemplateLiterals": true,
+        "ignoreRegExpLiterals": true
+      }
+    ],
+    "comma-dangle": ["error", "always-multiline"],
+    "multiline-ternary": ["error", "always-multiline"]
+  },
+  "globals": { "logger": true },
+  "overrides": [
+    {
+      "files": ["**/*.ts"],
+      "parser": "@typescript-eslint/parser",
+      "parserOptions": {
+        "ecmaVersion": "latest",
+        "sourceType": "module"
+      },
+      "plugins": ["@typescript-eslint", "prettier"],
+      "extends": [
+        "eslint:recommended",
+        "plugin:@typescript-eslint/eslint-recommended",
+        "plugin:@typescript-eslint/recommended",
+        "standard",
+        "prettier"
+      ]
+    }
+  ]
+}
