@@ -7,8 +7,8 @@ await testDbConnection()
 
 const server = http.createServer(app)
 
-server.listen(config.app.port, () => {
-  logger.info(`Server running on http://${config.app.host}:${config.app.port}`)
+server.listen(config.server.port, () => {
+  logger.info(`Server running on http://${config.server.host}:${config.server.port}`)
 })
 
 process.on("unhandledRejection", (err, _) => {
