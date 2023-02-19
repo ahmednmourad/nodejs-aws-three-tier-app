@@ -13,6 +13,9 @@ export default {
     dialect: "mysql",
     dialectOptions: { flags: "FOUND_ROWS" },
   },
+  auth: {
+    emailCodeExpirationInSeconds: 3600, // 1 hour
+  },
   emails: {
     apiKey: process.env.SENDINBLUE_API_KEY,
     fromName: process.env.MAIL_FROM_NAME,
