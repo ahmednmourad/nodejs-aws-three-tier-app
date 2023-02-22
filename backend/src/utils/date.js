@@ -13,3 +13,8 @@ export const addToCurrentDate = (value, unit) => {
 
   return date
 }
+
+export const isDateInThePast = (date) => {
+  const today = new Date().toISOString()
+  return date.toISOString() < today
+}
