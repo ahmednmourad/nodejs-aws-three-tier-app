@@ -1,5 +1,7 @@
 import "./environment.js"
 export default {
+  isProd: process.env.NODE_ENV === "production",
+  isLocal: process.env.NODE_ENV === "local",
   server: {
     port: process.env.PORT ?? 3000,
     host: process.env.HOST ?? "localhost",
