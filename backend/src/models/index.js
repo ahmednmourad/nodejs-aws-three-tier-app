@@ -9,7 +9,7 @@ const dbOptions = {
   dialect: config.db.dialect,
   dialectOptions: config.db.dialectOptions,
   define: { freezeTableName: true, timestamps: false },
-  logging: true,
+  logging: config.isLocal ? console.log : false,
 }
 const sequelize = new Sequelize(
   config.db.database,
