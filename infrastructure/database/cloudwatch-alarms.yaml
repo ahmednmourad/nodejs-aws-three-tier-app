@@ -1,0 +1,209 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: >
+  This CloudFormation stack sets up alarms to monitor the health and performance of an AWS RDS database instance. 
+  It includes alarms triggered by specific metrics like CPU usage, memory, connections, and I/O operations exceeding certain thresholds. 
+  Notifications are sent to an SNS topic specified in the stack's parameters. 
+  AWS CloudWatch is used to monitor the database's performance, and when alarms are triggered, notifications are sent to the specified SNS topic. 
+  This stack is designed to be used to quickly and easily deploy a set of alarms for monitoring an AWS RDS database instance..
+
+Parameters:
+  DbAlarmTopic:
+    Description: The database alarm topic
+    Type: String
+
+  DbInstanceIdentifier:
+    Type: String
+    Description: Name of a specific Database instance
+
+  DbAlarmMaxCpuPercent:
+    Description: Database CPU % max for alarm
+    Type: Number
+    Default: 80
+    MinValue: 1
+    MaxValue: 99
+    ConstraintDescription: Must be a percentage between 1-99%
+
+  DbAlarmMinMemoryInMb:
+    Description: Number of min free memory in MB for alarm
+    Type: Number
+    MinValue: 1
+    ConstraintDescription: A value of one MB or more
+
+  DbAlarmMaxConnections:
+    Description: Database maximum number of connections for alarm
+    Type: Number
+    MinValue: 1
+    ConstraintDescription: A value of one connection or more
+
+  DbAlarmMaxWriteIopsPerSecond:
+    Description: maximum number of write IOPS per second for alarm
+    Type: Number
+
+  DbAlarmMaxReadIopsPerSecond:
+    Description: maximum number of read IOPS per second for alarm
+    Type: Number
+
+Resources:
+  DbCpuAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: !Sub Email when the average CPU usage is higher than or equal ${DbAlarmMaxCpuPercent}%, 5 times within 5 minutes
+      TreatMissingData: notBreaching
+      Namespace: AWS/RDS
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value: !Ref DbInstanceIdentifier
+      # Conditions
+      Statistic: Maximum
+      MetricName: CPUUtilization
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Threshold: !Ref DbAlarmMaxCpuPercent
+      Period: 60
+      EvaluationPeriods: 5
+      # Action
+      OKActions:
+        - !Ref DbAlarmTopic
+      AlarmActions:
+        - !Ref DbAlarmTopic
+
+  DbFreeableMemoryAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: !Sub Email when the available memory is under ${DbAlarmMinMemoryInMb} MB, 5 times within 5 minutes
+      TreatMissingData: notBreaching
+      Namespace: AWS/RDS
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value: !Ref DbInstanceIdentifier
+      # Conditions
+      Statistic: Minimum
+      MetricName: FreeableMemory
+      ComparisonOperator: LessThanOrEqualToThreshold
+      Threshold: !Ref DbAlarmMinMemoryInMb
+      Period: 60
+      EvaluationPeriods: 5
+      # Action
+      OKActions:
+        - !Ref DbAlarmTopic
+      AlarmActions:
+        - !Ref DbAlarmTopic
+
+  DbConnectionsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: !Sub Email when DbConnections >= ${DbAlarmMaxConnections}, 1 time within 5 minutes # 85% of max connections at 2 GB Memory = 144
+      TreatMissingData: notBreaching
+      Namespace: AWS/RDS
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value: !Ref DbInstanceIdentifier
+      # Conditions
+      Statistic: Maximum
+      MetricName: DbConnections
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Threshold: !Ref DbAlarmMaxConnections
+      Period: 60
+      EvaluationPeriods: 1
+      # Action
+      OKActions:
+        - !Ref DbAlarmTopic
+      AlarmActions:
+        - !Ref DbAlarmTopic
+
+  DbWriteIopsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: !Sub Email when the write IOPS are greater than ${DbAlarmMaxWriteIopsPerSecond} operations per second
+      TreatMissingData: notBreaching
+      # Account + cluster
+      Namespace: AWS/RDS
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value: !Ref DbInstanceIdentifier
+      # Conditions
+      Statistic: Maximum
+      MetricName: WriteIOPS
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Threshold: !Ref DbAlarmMaxWriteIopsPerSecond
+      Period: 60
+      EvaluationPeriods: 1
+      # Action
+      OKActions:
+        - !Ref DbAlarmTopic
+      AlarmActions:
+        - !Ref DbAlarmTopic
+
+  DbReadIopsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Email when the read IOPS are greater than ${DbAlarmMaxReadIopsPerSecond} operations per second
+      TreatMissingData: notBreaching
+      # Account + cluster
+      Namespace: AWS/RDS
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value: !Ref DbInstanceIdentifier
+      # Conditions
+      Statistic: Maximum
+      MetricName: ReadIOPS
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Threshold: !Ref DbAlarmMaxReadIopsPerSecond
+      Period: 60
+      EvaluationPeriods: 1
+      # Action
+      OKActions:
+        - !Ref DbAlarmTopic
+      AlarmActions:
+        - !Ref DbAlarmTopic
+
+  DbNetworkThroughputAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Email when the network traffic is down (network_receive_throughput = 0 AND network_transmit_throughput = 0)
+      TreatMissingData: notBreaching
+      # Conditions
+      Metrics:
+        - Id: network_throughput
+          Expression: network_receive_throughput + network_transmit_throughput
+          Label: Sum of the two metrics
+        - Id: network_receive_throughput
+          MetricStat:
+            Metric:
+              Namespace: AWS/RDS
+              Dimensions:
+                - Name: DBInstanceIdentifier
+                  Value: !Ref DbInstanceIdentifier
+              MetricName: NetworkReceiveThroughput
+            Period: 60
+            Stat: Minimum
+          ReturnData: false
+        - Id: network_transmit_throughput
+          MetricStat:
+            Metric:
+              Namespace: AWS/RDS
+              Dimensions:
+                - Name: DBInstanceIdentifier
+                  Value: !Ref DbInstanceIdentifier
+              MetricName: NetworkTransmitThroughput
+            Period: 60
+            Stat: Minimum
+          ReturnData: false
+      ComparisonOperator: LessThanOrEqualToThreshold
+      Threshold: 0
+      EvaluationPeriods: 1
+      # Action
+      OKActions:
+        - !Ref DbAlarmTopic
+      AlarmActions:
+        - !Ref DbAlarmTopic
+
+  # Additional Important Metrics
+  # ---------------
+  # FreeStorageSpace: The amount of available storage space. (would be useful if storage autoscaling is disabled)
+  # SwapUsage: The amount of swap space used on the DB instance.
+  # ReadLatency, WriteLatency: The average amount of time taken per disk I/O operation.
+  # WriteLatency: The average amount of time taken per disk I/O operation.
+  # DiskQueueDepth: The number of outstanding I/Os (read/write requests) waiting to access the disk.
+  # CPUCreditBalance: The number of CPU credits left (only applies to db.t* instance types).
+  # ---------------
