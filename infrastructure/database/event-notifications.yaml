@@ -1,0 +1,27 @@
+Description: This template creates an SNS topic to provide notification when an Amazon RDS events occur.
+
+Parameters:
+  DbAlarmTopic:
+    Description: The database alarm topic
+    Type: String
+
+  SourceInstances:
+    Type: String
+    Description: Instances that event subscription will consume events from.
+    ConstraintDescription: If multiple values are passed they must be a list of strings separated by commas for example => instance-1,instance-2
+
+Resources:
+  DbEventSubscription:
+    Type: AWS::RDS::EventSubscription
+    Properties:
+      SnsTopicArn: !Ref DbAlarmTopic
+      SourceType: db-instance
+      SourceIds: !Split [",", !Ref SourceInstances]
+      EventCategories:
+        - failover
+        - failure
+        - low storage
+        - maintenance
+        - notification
+        - recovery
+      Enabled: true
