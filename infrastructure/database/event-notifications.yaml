@@ -1,3 +1,5 @@
+AWSTemplateFormatVersion: 2010-09-09
+
 Description: This template creates an SNS topic to provide notification when an Amazon RDS events occur.
 
 Parameters:
