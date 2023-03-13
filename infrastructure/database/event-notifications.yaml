@@ -1,6 +1,9 @@
 AWSTemplateFormatVersion: 2010-09-09
 
-Description: This template creates an SNS topic to provide notification when an Amazon RDS events occur.
+Description: >
+  This CloudFormation template sets up an RDS event subscription to send notifications to an SNS topic when specific database events occur. 
+  The user can provide a list of instances to subscribe to, and the subscription is configured to send notifications for some event categories. 
+  These categories include failover, failure, low storage, maintenance, etc.
 
 Parameters:
   DbAlarmTopic:
