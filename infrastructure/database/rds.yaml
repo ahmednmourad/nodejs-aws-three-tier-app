@@ -1,0 +1,146 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Parameters:
+  VpcStackName:
+    Type: String
+    Description: Name of an active CloudFormation stack that contains the networking resources, such as the subnet and security group, that will be used in this stack.
+    MinLength: 1
+    MaxLength: 255
+    AllowedPattern: "^[a-zA-Z][-a-zA-Z0-9]*$"
+
+  DbName:
+    Default: projectDb
+    Description: The database name
+    Type: String
+    MinLength: 1
+    MaxLength: 64
+    AllowedPattern: "[a-zA-Z][a-zA-Z0-9]*"
+    ConstraintDescription: Must begin with a letter and contain only alphanumeric characters.
+
+  DbUsername:
+    NoEcho: true
+    Description: Database admin account username
+    Type: String
+    MinLength: 1
+    MaxLength: 16
+    AllowedPattern: "[a-zA-Z][a-zA-Z0-9]*"
+    ConstraintDescription: must begin with a letter and contain only alphanumeric characters.
+
+  DbPassword:
+    NoEcho: true
+    Type: String
+    Description: Database admin account password
+    MinLength: 6
+    MaxLength: 41
+    AllowedPattern: "[a-zA-Z0-9]*"
+    ConstraintDescription: Password must contain only alphanumeric characters
+
+  DbAllocatedStorage:
+    Default: 20
+    Description: The size of the database (Gb)
+    Type: Number
+    MinValue: 20
+    MaxValue: 1024
+    ConstraintDescription: must be between 5 and 1024Gb.
+
+  DbInstanceClass:
+    Description: The database instance type
+    Type: String
+    Default: db.t2.micro
+    AllowedValues:
+      - db.t1.micro
+      - db.t2.micro
+    ConstraintDescription: must select a valid database instance type.
+
+  MultiAz:
+    Description: Multi-AZ master database
+    Type: String
+    Default: false
+    AllowedValues: [true, false]
+    ConstraintDescription: must be true or false.
+
+  EncryptionAtRest:
+    Description: The optional flag for encryption at rest (db.t2.small and above)
+    Type: String
+    Default: false
+    AllowedValues:
+      - true
+      - false
+    ConstraintDescription: Only true or false are allowed
+
+  BackupRetentionInDays:
+    Type: Number
+    Description: Backup retention (in days)
+    MinValue: 1
+    ConstraintDescription: Must be a number >= 1
+    Default: 7
+
+Resources:
+  DbInstance:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Snapshot
+    Properties:
+      # Settings
+      MasterUsername: !Ref DbUsername # Warning: Update requires replacement
+      MasterUserPassword: !Ref DbPassword
+      # Engine options
+      Engine: MySQL
+      EngineVersion: 8.0.31
+      # Deployment options
+      MultiAZ: !Ref MultiAz
+      # Instance configuration
+      DBInstanceClass: !Ref DbInstanceClass
+      # Storage
+      StorageType: gp3
+      StorageEncrypted: !Ref EncryptionAtRest
+      AllocatedStorage: !Ref DbAllocatedStorage # Find the new value of AllocatedStorage on each deployment (Autoscaling changes this value) and then update it
+      # Connectivity
+      PubliclyAccessible: false # Warning: Update requires replacement
+      DBSubnetGroupName: !Ref DbSubnetGroup
+      VPCSecurityGroups:
+        - Fn::ImportValue: !Sub ${VpcStackName}-DbSecurityGroup
+      # Monitoring
+      EnablePerformanceInsights: false
+      # Database options
+      DBName: !Ref DbName # Warning: Update requires replacement
+      DBParameterGroupName: !Ref DbParameterGroup
+      # Backup
+      BackupRetentionPeriod: !Ref BackupRetentionInDays
+      DeleteAutomatedBackups: false
+      # Log exports
+      EnableCloudwatchLogsExports:
+        - audit
+        - error
+        - slowquery
+      # Maintenance
+      AutoMinorVersionUpgrade: true
+      AllowMajorVersionUpgrade: false
+      # Deletion protection
+      DeletionProtection: true
+
+  DbSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Database subnet group
+      SubnetIds:
+        - Fn::ImportValue: !Sub ${VpcStackName}-PrivateSubnet1
+        - Fn::ImportValue: !Sub ${VpcStackName}-PrivateSubnet2
+
+  DbParameterGroup:
+    Type: AWS::RDS::DBParameterGroup
+    Properties:
+      Description: Custom MySQL Parameter Group
+      Family: mysql8.0
+      Parameters:
+        slow_query_log: 1
+        long_query_time: 2
+        log_output: TABLE
+
+Outputs:
+  DbName:
+    Description: The Database instance name
+    Value: !Ref DbInstance
+
+  DbUrl:
+    Description: The database URL
+    Value: !GetAtt DbInstance.Endpoint.Address
