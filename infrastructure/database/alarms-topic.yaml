@@ -1,0 +1,20 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Parameters:
+  AlarmEmail:
+    Type: String
+    Description: Email to send alerts to
+
+Resources:
+  DbAlarmTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: Database Alarm Topic
+      Subscription:
+        - Endpoint: !Ref AlarmEmail
+          Protocol: email
+
+Outputs:
+  DbAlarmTopicArn:
+    Description: Arn of Created Database Alarm Topic
+    Value: !Ref DbAlarmTopic
