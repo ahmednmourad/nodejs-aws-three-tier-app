@@ -1,0 +1,175 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Parameters:
+  EnableCloudWatchAlarms:
+    Type: String
+    Description: Set to true to enable (additional charges - https://aws.amazon.com/cloudwatch/pricing/)
+    Default: false
+    AllowedValues: [true, false]
+
+  CreateEventNotification:
+    Type: String
+    Description: Whether database event notification should be added.
+    Default: false
+    AllowedValues: [true, false]
+
+  # rds.yaml parameters
+  VpcStackName:
+    Type: String
+    Description: Name of an active CloudFormation stack that contains the networking resources, such as the subnet and security group, that will be used in this stack.
+    MinLength: 1
+    MaxLength: 255
+    AllowedPattern: "^[a-zA-Z][-a-zA-Z0-9]*$"
+
+  DbName:
+    Default: projectDb
+    Description: The database name
+    Type: String
+    MinLength: 1
+    MaxLength: 64
+    AllowedPattern: "[a-zA-Z][a-zA-Z0-9]*"
+    ConstraintDescription: Must begin with a letter and contain only alphanumeric characters.
+
+  DbUsername:
+    NoEcho: true
+    Description: Database admin account username
+    Type: String
+    MinLength: 1
+    MaxLength: 16
+    AllowedPattern: "[a-zA-Z][a-zA-Z0-9]*"
+    ConstraintDescription: must begin with a letter and contain only alphanumeric characters.
+
+  DbPassword:
+    NoEcho: true
+    Type: String
+    Description: Database admin account password
+    MinLength: 6
+    MaxLength: 41
+    AllowedPattern: "[a-zA-Z0-9]*"
+    ConstraintDescription: Password must contain only alphanumeric characters
+
+  DbAllocatedStorage:
+    Default: 20
+    Description: The size of the database (Gb)
+    Type: Number
+    MinValue: 20
+    MaxValue: 1024
+    ConstraintDescription: must be between 5 and 1024Gb.
+
+  DbInstanceClass:
+    Description: The database instance type
+    Type: String
+    Default: db.t2.micro
+    AllowedValues:
+      - db.t1.micro
+      - db.t2.micro
+    ConstraintDescription: must select a valid database instance type.
+
+  MultiAz:
+    Description: Multi-AZ master database
+    Type: String
+    Default: false
+    AllowedValues: [true, false]
+    ConstraintDescription: must be true or false.
+
+  EncryptionAtRest:
+    Description: The optional flag for encryption at rest (db.t2.small and above)
+    Type: String
+    Default: false
+    AllowedValues:
+      - true
+      - false
+    ConstraintDescription: Only true or false are allowed
+
+  BackupRetentionInDays:
+    Type: Number
+    Description: Backup retention (in days)
+    MinValue: 1
+    ConstraintDescription: Must be a number >= 1
+    Default: 7
+
+  # alarms-topic.yaml parameters
+  AlarmEmail:
+    Type: String
+    Description: Email to send alerts to
+
+  # cloudwatch-alarms.yaml parameters
+  DbAlarmMaxCpuPercent:
+    Description: Database CPU % max for alarm (if enabled)
+    Type: Number
+    Default: 80
+    MinValue: 1
+    MaxValue: 99
+    ConstraintDescription: Must be a percentage between 1-99%
+
+  DbAlarmMinMemoryInMb:
+    Description: Number of min free memory in MB for alarm (if enabled)
+    Type: Number
+    MinValue: 1
+    ConstraintDescription: A value of one MB or more
+
+  DbAlarmMaxConnections:
+    Description: Database maximum number of connections for alarm (if enabled)
+    Type: Number
+    MinValue: 1
+    ConstraintDescription: A value of one connection or more
+
+  DbAlarmMaxWriteIopsPerSecond:
+    Description: maximum number of write IOPS per second for alarm (if enabled)
+    Type: Number
+
+  DbAlarmMaxReadIopsPerSecond:
+    Description: maximum number of read IOPS per second for alarm (if enabled)
+    Type: Number
+
+Conditions:
+  CloudWatchAlarmsEnabled: !Equals [!Ref EnableCloudWatchAlarms, true]
+  CreateEventNotification: !Equals [!Ref CreateEventNotification, true]
+  CreateDbAlarmsTopic: !Or [Condition: CloudWatchAlarmsEnabled, Condition: CreateEventNotification]
+
+Resources:
+  RdsStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: ./rds.yaml
+      Parameters:
+        VpcStackName: !Ref VpcStackName
+        DbName: !Ref DbName
+        DbUsername: !Ref DbUsername
+        DbPassword: !Ref DbPassword
+        DbAllocatedStorage: !Ref DbAllocatedStorage
+        DbInstanceClass: !Ref DbInstanceClass
+        MultiAz: !Ref MultiAz
+        EncryptionAtRest: !Ref EncryptionAtRest
+        BackupRetentionInDays: !Ref BackupRetentionInDays
+
+  DbAlarmsTopicStack:
+    Type: AWS::CloudFormation::Stack
+    Condition: CreateDbAlarmsTopic
+    Properties:
+      TemplateURL: ./alarms-topic.yaml
+      Parameters:
+        AlarmEmail: !Ref AlarmEmail
+
+  DbCloudWatchAlarmsStack:
+    Type: AWS::CloudFormation::Stack
+    Condition: CloudWatchAlarmsEnabled
+    Properties:
+      TemplateURL: ./cloudwatch-alarms.yaml
+      Parameters:
+        DbAlarmTopic: !GetAtt DbAlarmsTopicStack.Outputs.DbAlarmTopicArn
+        DbInstanceIdentifier: !GetAtt RdsStack.Outputs.DbName
+        DbAlarmMaxCpuPercent: !Ref DbAlarmMaxCpuPercent
+        DbAlarmMinMemoryInMb: !Ref DbAlarmMinMemoryInMb
+        DbAlarmMaxConnections: !Ref DbAlarmMaxConnections
+        DbAlarmMaxWriteIopsPerSecond: !Ref DbAlarmMaxWriteIopsPerSecond
+        DbAlarmMaxReadIopsPerSecond: !Ref DbAlarmMaxReadIopsPerSecond
+
+  DbEventNotificationStack:
+    Type: AWS::CloudFormation::Stack
+    Condition: CreateEventNotification
+    Properties:
+      TemplateURL: ./event-notifications.yaml
+      Parameters:
+        DbAlarmTopic: !GetAtt DbAlarmsTopicStack.Outputs.DbAlarmTopicArn
+        SourceInstances: !GetAtt RdsStack.Outputs.DbName
