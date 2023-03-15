@@ -208,7 +208,6 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       VpcId: !Ref Vpc
-      GroupName: BastionHostSecurityGroup
       GroupDescription: Enable SSH access
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -223,7 +222,6 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       VpcId: !Ref Vpc
-      GroupName: BackendLoadBalancerSecurityGroup
       GroupDescription: Enable HTTP and HTTPS access from anywhere
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -242,7 +240,6 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       VpcId: !Ref Vpc
-      GroupName: BackendServerSecurityGroup
       GroupDescription: Enable SSH access from the bastion host and enable HTTP/HTTPS from the load balancer
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -265,7 +262,6 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       VpcId: !Ref Vpc
-      GroupName: DbSecurityGroup
       GroupDescription: Enable access on MySQl port from the backend server and the bastion host
       SecurityGroupIngress:
         - SourceSecurityGroupId: !Ref BackendServerSecurityGroup
