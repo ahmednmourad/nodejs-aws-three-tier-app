@@ -216,7 +216,7 @@ Resources:
           CidrIp: !Ref SshLocation
       Tags:
         - Key: Name
-          Value: Bastion Host Security Group
+          Value: !Sub ${AWS::StackName}-BastionHostSecurityGroup
 
   BackendLoadBalancerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -234,7 +234,7 @@ Resources:
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
-          Value: Backend Load Balancer Security Group
+          Value: !Sub ${AWS::StackName}-BackendLoadBalancerSecurityGroup
 
   BackendServerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -256,7 +256,7 @@ Resources:
           SourceSecurityGroupId: !Ref BackendLoadBalancerSecurityGroup
       Tags:
         - Key: Name
-          Value: Backend EC2 Security Group
+          Value: !Sub ${AWS::StackName}-BackendServerSecurityGroup
 
   DbSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -274,7 +274,7 @@ Resources:
           ToPort: 3306
       Tags:
         - Key: Name
-          Value: Database Security Group
+          Value: !Sub ${AWS::StackName}-DbSecurityGroup
 
 Outputs:
   VpcId:
