@@ -204,6 +204,21 @@ Resources:
       SubnetId: !Ref PrivateSubnet2
       RouteTableId: !Ref PrivateRouteTable2
 
+  BastionHostSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref Vpc
+      GroupName: BastionHostSecurityGroup
+      GroupDescription: Enable SSH access
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref SshLocation
+      Tags:
+        - Key: Name
+          Value: Bastion Host Security Group
+
   BackendLoadBalancerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -221,33 +236,43 @@ Resources:
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
-          Value: Backend LoadBalancer Security Group
+          Value: Backend Load Balancer Security Group
+
   BackendServerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       VpcId: !Ref Vpc
       GroupName: BackendServerSecurityGroup
-      GroupDescription: Enable SSH access and enable HTTP from the load balancer only
+      GroupDescription: Enable SSH access from the bastion host and enable HTTP/HTTPS from the load balancer
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
-          CidrIp: !Ref SshLocation
+          SourceSecurityGroupId: !Ref BastionHostSecurityGroup
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
           SourceSecurityGroupId: !Ref BackendLoadBalancerSecurityGroup
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          SourceSecurityGroupId: !Ref BackendLoadBalancerSecurityGroup
       Tags:
         - Key: Name
           Value: Backend EC2 Security Group
+
   DbSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       VpcId: !Ref Vpc
       GroupName: DbSecurityGroup
-      GroupDescription: Enable access on MySQl port from the EC2 only
+      GroupDescription: Enable access on MySQl port from the backend server and the bastion host
       SecurityGroupIngress:
         - SourceSecurityGroupId: !Ref BackendServerSecurityGroup
+          IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+        - SourceSecurityGroupId: !Ref BastionHostSecurityGroup
           IpProtocol: tcp
           FromPort: 3306
           ToPort: 3306
