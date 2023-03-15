@@ -11,9 +11,9 @@ Parameters:
     Type: String
 
   SourceInstances:
-    Type: String
+    Type: CommaDelimitedList
     Description: Instances that event subscription will consume events from.
-    ConstraintDescription: If multiple values are passed they must be a list of strings separated by commas for example => instance-1,instance-2
+    ConstraintDescription: If multiple values are passed they must be a list of strings separated by commas for example => instance-1, instance-2
 
 Resources:
   DbEventSubscription:
