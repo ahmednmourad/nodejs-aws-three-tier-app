@@ -310,6 +310,11 @@ Outputs:
     Value: !GetAtt Vpc.DefaultSecurityGroup
     Export:
       Name: !Sub ${AWS::StackName}-DefaultSecurityGroup
+  BastionHostSecurityGroupId:
+    Description: Bastion host security group ID
+    Value: !GetAtt BastionHostSecurityGroup.GroupId
+    Export:
+      Name: !Sub ${AWS::StackName}-BastionHostSecurityGroup
   BackendLoadBalancerSecurityGroupId:
     Description: Backend LoadBalancer security group ID
     Value: !GetAtt BackendLoadBalancerSecurityGroup.GroupId
