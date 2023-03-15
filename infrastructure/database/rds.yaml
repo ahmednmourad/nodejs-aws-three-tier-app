@@ -1,5 +1,6 @@
 AWSTemplateFormatVersion: 2010-09-09
 
+# Database stack creation prerequisite:  First create a VPC stack
 Parameters:
   VpcStackName:
     Type: String
