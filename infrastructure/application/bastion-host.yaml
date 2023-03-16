@@ -1,0 +1,54 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+# Bastion stack creation prerequisite: first create an EC2 key pair and a VPC stack.
+Description: >
+  This template creates a bastion host, which is a publicly accessible EC2 instance that enables secure access to private resources within a VPC. 
+  The bastion host acts as a gateway, providing authorized users with secure access to private instances without the need to expose them directly to the internet.
+
+Parameters:
+  VpcStackName:
+    Type: String
+    Description: Name of an active CloudFormation stack that contains the networking resources, such as the subnet and security group.
+    MinLength: 1
+    MaxLength: 255
+    AllowedPattern: "^[a-zA-Z][-a-zA-Z0-9]*$"
+
+  KeyName:
+    Description: EC2 key pair name for bastion host SSH access
+    Type: AWS::EC2::KeyPair::KeyName
+
+Mappings:
+  # Amazon Linux 2 AMI
+  AmiMap:
+    eu-central-1:
+      Ami: ami-06616b7884ac98cdd
+    eu-west-3:
+      Ami: ami-09352f5c929bf417c
+
+Resources:
+  BastionHost:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      KeyName: !Ref KeyName
+      ImageId: !FindInMap [AmiMap, !Ref AWS::Region, Ami]
+      SecurityGroupIds:
+        - Fn::ImportValue: !Sub ${VpcStackName}-BastionHostSecurityGroup
+      SubnetId:
+        Fn::ImportValue: !Sub ${VpcStackName}-PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: Bastion host server
+        - Key: Description
+          Value: Bastion host server to access private resources.
+
+  BastionHostEip:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      InstanceId: !Ref BastionHost
+
+Outputs:
+  BastionEip:
+    Description: EIP for bastion host
+    Value: !Ref BastionHostEip
