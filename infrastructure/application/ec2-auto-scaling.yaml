@@ -1,0 +1,235 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+# EC2 Auto Scaling stack creation perquisites: First create a VPC stack, RDS Stack, S3 Stack, Load Balancer Stack, and an EC2 Key Pair
+Description: >
+  This template provisions an Auto Scaling Group that creates one or more Amazon EC2 instance running a Node.js backend application.
+  An Elastic Load Balancing load balancer is attached to the Auto Scaling group, which acts as a single point of contact for all incoming traffic to the Auto Scaling group.
+  The application scales automatically based on CPU utilization of the backend servers and is spread across multiple Availability Zones for high availability.
+  Notifications will be sent to the operator email address on scaling events.
+
+Parameters:
+  VpcStackName:
+    Type: String
+    Description: Name of an active CloudFormation stack that contains the networking resources, such as the subnet and security group, that will be used in this stack.
+    MinLength: 1
+    MaxLength: 255
+    AllowedPattern: "^[a-zA-Z][-a-zA-Z0-9]*$"
+
+  LoadBalancerTargetGroups:
+    Type: CommaDelimitedList
+    Description: The ARN of the Elastic Load Balancing target groups to associate with the Auto Scaling group.
+    ConstraintDescription: If multiple values are passed they must be a list of strings separated by commas for example => target-1, target-2
+
+  KeyName:
+    Description: The EC2 Key Pair to allow SSH access to the instances
+    Type: AWS::EC2::KeyPair::KeyName
+    ConstraintDescription: must be the name of an existing EC2 KeyPair.
+
+  InstanceType:
+    Description: Backend EC2 instance type
+    Type: String
+    Default: t2.micro
+    AllowedValues:
+      - t2.micro
+      - t2.nano
+    ConstraintDescription: must be a valid EC2 instance type.
+
+  DbHostname:
+    Description: The hostname of the database
+    Type: String
+
+  DbName:
+    Description: The database name
+    Type: String
+    MinLength: "1"
+    MaxLength: "64"
+    AllowedPattern: "[a-zA-Z][a-zA-Z0-9]*"
+    ConstraintDescription: Must begin with a letter and contain only alphanumeric characters.
+
+  DbUsername:
+    NoEcho: true
+    Description: Username for MySQL database access
+    Type: String
+    MinLength: 1
+    MaxLength: 16
+    AllowedPattern: "[a-zA-Z][a-zA-Z0-9]*"
+    ConstraintDescription: must begin with a letter and contain only alphanumeric characters.
+
+  DbPassword:
+    NoEcho: true
+    Description: Password MySQL database access
+    Type: String
+    MinLength: 8
+    MaxLength: 41
+    AllowedPattern: "[a-zA-Z0-9]*"
+    ConstraintDescription: must contain only alphanumeric characters.
+
+  EmailApiKey:
+    NoEcho: true
+    Description: API key for Sending Emails
+    Type: String
+
+  MailFromName:
+    Type: String
+
+  MailFromEmail:
+    Type: String
+
+  AccessTokenSecretKey:
+    NoEcho: true
+    Description: JWT access token secret
+    Type: String
+
+  S3BucketName:
+    Type: String
+    Description: Name of an existing S3 bucket
+
+  OperatorEmail:
+    Description: Email address to notify if there are any scaling operations
+    Type: String
+    AllowedPattern: "([a-zA-Z0-9_\\-\\.]+)@((\\[[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.)|(([a-zA-Z0-9\\-]+\\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\\]?)"
+    ConstraintDescription: must be a valid email address.
+
+Mappings:
+  # Amazon Linux 2 AMI
+  AmiMap:
+    eu-central-1:
+      Ami: ami-06616b7884ac98cdd
+    eu-west-3:
+      Ami: ami-09352f5c929bf417c
+
+Resources:
+  BackendAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    CreationPolicy:
+      ResourceSignal:
+        Count: 1
+        Timeout: PT5M
+    Properties:
+      LaunchTemplate:
+        LaunchTemplateId: !Ref BackendServerLaunchTemplate
+        Version: !GetAtt BackendServerLaunchTemplate.LatestVersionNumber
+      DesiredCapacity: 1
+      MinSize: 0
+      MaxSize: 5
+      TargetGroupARNs: !Ref LoadBalancerTargetGroups
+      HealthCheckType: ELB
+      VPCZoneIdentifier:
+        - Fn::ImportValue: !Sub ${VpcStackName}-PrivateSubnet1
+        - Fn::ImportValue: !Sub ${VpcStackName}-PrivateSubnet2
+      NotificationConfiguration:
+        TopicARN: !Ref BackendAutoScalingGroupTopic
+        NotificationTypes:
+          - autoscaling:EC2_INSTANCE_LAUNCH
+          - autoscaling:EC2_INSTANCE_LAUNCH_ERROR
+          - autoscaling:EC2_INSTANCE_TERMINATE
+          - autoscaling:EC2_INSTANCE_TERMINATE_ERROR
+
+  BackendServerLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          packages:
+            yum:
+              gcc-c++: []
+              make: []
+              git: []
+          commands:
+            01_install_nodejs:
+              command: |
+                curl -sL https://rpm.nodesource.com/setup_16.x | sudo bash -
+                yum install nodejs -y
+            02_clone_repository:
+              command: git clone https://github.com/ahmednmourad/nodejs-three-tier-app.git /home/ec2-user/nodejs-three-tier-app || { echo "Failed to clone repository" ; exit 1; }
+            03_install_dependencies:
+              command: npm ci --omit=dev || { echo "Failed to install dependencies" ; exit 1; }
+              cwd: /home/ec2-user/nodejs-three-tier-app/backend
+            04_create_env_file:
+              command: !Sub |
+                cat <<EOF > .env.production
+                PORT=80
+                DB_HOSTNAME=${DbHostname}
+                DB_USERNAME=${DbUsername}
+                DB_PASSWORD=${DbPassword}
+                DB_NAME=${DbName}
+                SENDINBLUE_API_KEY=${EmailApiKey}
+                MAIL_FROM_NAME=${MailFromName}
+                MAIL_FROM_EMAIL=${MailFromEmail}
+                ACCESS_TOKEN_SECRET_KEY=${AccessTokenSecretKey}
+                S3_BUCKET_NAME=${S3BucketName}
+                EOF
+              cwd: /home/ec2-user/nodejs-three-tier-app/backend
+            05_install_pm2:
+              command: npm install pm2 -g || { echo "Failed to install PM2" ; exit 1; }
+            06_start_application:
+              command: PM2_HOME="/root/.pm2" pm2 start npm --name "nodejs-three-tier-app" -- run production --watch || { echo "Failed to start the application" ; exit 1; }
+              cwd: /home/ec2-user/nodejs-three-tier-app/backend
+    Properties:
+      LaunchTemplateData:
+        InstanceType: !Ref InstanceType
+        KeyName: !Ref KeyName
+        SecurityGroupIds:
+          - Fn::ImportValue: !Sub ${VpcStackName}-BackendServerSecurityGroup
+        IamInstanceProfile:
+          Arn: !GetAtt BackendServerInstanceProfile.Arn
+        ImageId: !FindInMap [AmiMap, !Ref AWS::Region, Ami]
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+
+            # Update the AWS CloudFormation helper scripts
+            yum update -y aws-cfn-bootstrap
+
+            # Run cfn-init to fetch and process AWS::CloudFormation::Init metadata
+            /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource BackendServerLaunchTemplate --region ${AWS::Region}
+
+            # Check the exit status of the previous command and send a signal to CloudFormation with the result
+            # If cfn-init fails, the CloudFormation stack creation/update will also fail
+            /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource BackendAutoScalingGroup --region ${AWS::Region}
+
+  BackendServerInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles:
+        - !Ref BackendServerS3Role
+
+  BackendServerS3Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      Path: /
+      Policies:
+        - PolicyName: s3-policy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "s3:PutObject"
+                Resource: !Sub arn:aws:s3:::${S3BucketName}
+
+  BackendAutoScalingGroupTargetScalingPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AutoScalingGroupName: !Ref BackendAutoScalingGroup
+      PolicyType: TargetTrackingScaling
+      TargetTrackingConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ASGAverageCPUUtilization
+        TargetValue: 70 # Scale out if CPU utilization exceeds 70%
+
+  BackendAutoScalingGroupTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: Backend Auto Scaling Group Topic
+      Subscription:
+        - Endpoint: !Ref OperatorEmail
+          Protocol: email
