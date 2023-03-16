@@ -193,11 +193,11 @@ Resources:
           Value: !Sub ${VpcName}-private-route-table-1
   DefaultPrivateRoute2:
     Type: AWS::EC2::Route
-    Condition: CreateTwoNatGateways
+    Condition: CreateOneNatGateway
     Properties:
       RouteTableId: !Ref PrivateRouteTable2
       DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref NatGateway2
+      NatGatewayId: !If [CreateTwoNatGateways, !Ref NatGateway2, !Ref NatGateway1]
   PrivateSubnet2RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
