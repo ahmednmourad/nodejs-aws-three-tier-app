@@ -1,0 +1,64 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+# Load balancer stack creation perquisites: First create a VPC stack
+Description: >
+  This template creates an Elastic Load Balancer for the backend application that spans multiple Availability Zones in a region.
+  The load balancer has a simple health check against the default app health route.
+
+Parameters:
+  VpcStackName:
+    Type: String
+    Description: Name of an active CloudFormation stack that contains the networking resources, such as the subnet and security group, that will be used in this stack.
+    MinLength: 1
+    MaxLength: 255
+    AllowedPattern: "^[a-zA-Z][-a-zA-Z0-9]*$"
+
+Resources:
+  BackendLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Type: application
+      # Note: In a real world application the backend load balancer should be internal instead of internet-facing and in private subnets,
+      # because in a typical architecture the frontend load balancer communicates with an internal load balancer for the backend tier
+      Scheme: internet-facing
+      SecurityGroups:
+        - Fn::ImportValue: !Sub ${VpcStackName}-BackendLoadBalancerSecurityGroup
+      Subnets:
+        - Fn::ImportValue: !Sub ${VpcStackName}-PublicSubnet1
+        - Fn::ImportValue: !Sub ${VpcStackName}-PublicSubnet2
+
+  BackendLoadBalancerListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref BackendLoadBalancer
+      Protocol: HTTP
+      Port: 80
+      DefaultActions:
+        - TargetGroupArn: !Ref BackendLoadBalancerTargetGroup
+          Type: forward
+
+  BackendLoadBalancerTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckEnabled: true
+      HealthCheckIntervalSeconds: 30
+      HealthCheckPath: /api/health
+      HealthCheckPort: 80
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 3
+      UnhealthyThresholdCount: 5
+      TargetType: instance
+      Protocol: HTTP
+      Port: 80
+      VpcId:
+        Fn::ImportValue: !Sub ${VpcStackName}-VpcId
+
+Outputs:
+  BackendLoadBalancerUrl:
+    Description: The URL of the app
+    Value: !Join ["", ["http://", !GetAtt BackendLoadBalancer.DNSName]]
+
+  BackendLoadBalancerTargetGroupArn:
+    Description: The ARN target group for the backend load balancer
+    Value: !GetAtt BackendLoadBalancerTargetGroup.TargetGroupArn
