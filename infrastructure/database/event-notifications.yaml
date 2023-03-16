@@ -21,7 +21,7 @@ Resources:
     Properties:
       SnsTopicArn: !Ref DbAlarmTopic
       SourceType: db-instance
-      SourceIds: !Split [",", !Ref SourceInstances]
+      SourceIds: !Ref SourceInstances
       EventCategories:
         - failover
         - failure
