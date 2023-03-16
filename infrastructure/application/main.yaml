@@ -1,10 +1,11 @@
 AWSTemplateFormatVersion: "2010-09-09"
 
+# Application stack creation perquisites: First create a VPC stack RDS Stack, S3 Stack, and two EC2 Key pairs for backend and bastion host
 Description: >
   This template creates an Elastic Load Balancer for the backend application.
   The load balancer has a simple health check against the default app health route.
-
-  This template provisions an Auto Scaling Group that creates one or more Amazon EC2 instance running a Node.js backend application.
+  It also provisions an Auto Scaling Group that creates one or more Amazon EC2 instance running a Node.js backend application.
+  An Elastic Load Balancing load balancer is attached to the Auto Scaling group, which acts as a single point of contact for all incoming traffic to the Auto Scaling group.
   The application scales automatically based on CPU utilization of the backend servers and is spread across multiple Availability Zones for high availability.
   Notifications will be sent to the operator email address on scaling events.
 
@@ -16,10 +17,12 @@ Parameters:
     MaxLength: 255
     AllowedPattern: "^[a-zA-Z][-a-zA-Z0-9]*$"
 
-  KeyName:
-    Description: The EC2 Key Pair to allow SSH access to the instances
+  # auto-scaling.yaml parameters
+  BackendKeyName:
+    Description: The EC2 Key Pair to allow SSH access to the backend instances
     Type: AWS::EC2::KeyPair::KeyName
     ConstraintDescription: must be the name of an existing EC2 KeyPair.
+
   InstanceType:
     Description: Backend EC2 instance type
     Type: String
@@ -32,6 +35,7 @@ Parameters:
   DbHostname:
     Description: The hostname of the database
     Type: String
+
   DbName:
     Description: The database name
     Type: String
@@ -39,6 +43,7 @@ Parameters:
     MaxLength: "64"
     AllowedPattern: "[a-zA-Z][a-zA-Z0-9]*"
     ConstraintDescription: Must begin with a letter and contain only alphanumeric characters.
+
   DbUsername:
     NoEcho: true
     Description: Username for MySQL database access
@@ -47,6 +52,7 @@ Parameters:
     MaxLength: 16
     AllowedPattern: "[a-zA-Z][a-zA-Z0-9]*"
     ConstraintDescription: must begin with a letter and contain only alphanumeric characters.
+
   DbPassword:
     NoEcho: true
     Description: Password MySQL database access
@@ -55,18 +61,23 @@ Parameters:
     MaxLength: 41
     AllowedPattern: "[a-zA-Z0-9]*"
     ConstraintDescription: must contain only alphanumeric characters.
+
   EmailApiKey:
     NoEcho: true
     Description: API key for Sending Emails
     Type: String
+
   MailFromName:
     Type: String
+
   MailFromEmail:
     Type: String
+
   AccessTokenSecretKey:
     NoEcho: true
     Description: JWT access token secret
     Type: String
+
   S3BucketName:
     Type: String
     Description: Name of an existing S3 bucket
@@ -77,200 +88,48 @@ Parameters:
     AllowedPattern: "([a-zA-Z0-9_\\-\\.]+)@((\\[[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.)|(([a-zA-Z0-9\\-]+\\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\\]?)"
     ConstraintDescription: must be a valid email address.
 
-Mappings:
-  # Amazon Linux 2 AMI
-  AmiMap:
-    eu-central-1:
-      Ami: ami-06616b7884ac98cdd
-    eu-west-3:
-      Ami: ami-09352f5c929bf417c
+  # bastion-host.yaml parameters
+  BastionHostKeyName:
+    Description: EC2 key pair name for bastion host SSH access
+    Type: AWS::EC2::KeyPair::KeyName
 
 Resources:
-  ################################################################################
-  #                            Backend Load Balancer                             #
-  ################################################################################
-
-  BackendLoadBalancer:
-    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+  LoadBalancersStack:
+    Type: AWS::CloudFormation::Stack
     Properties:
-      Type: application
-      # Note: In a real world application the backend load balancer should be internal instead of internet-facing,
-      # because in a typical architecture the frontend load balancer communicates with an internal load balancer for the backend tier
-      Scheme: internet-facing
-      SecurityGroups:
-        - Fn::ImportValue: !Sub ${VpcStackName}-BackendLoadBalancerSecurityGroup
-      Subnets:
-        - Fn::ImportValue: !Sub ${VpcStackName}-PublicSubnet1
-        - Fn::ImportValue: !Sub ${VpcStackName}-PublicSubnet2
+      TemplateURL: ./load-balancers.yaml
+      Parameters:
+        VpcStackName: !Ref VpcStackName
 
-  BackendLoadBalancerListener:
-    Type: AWS::ElasticLoadBalancingV2::Listener
+  Ec2AutoScalingStack:
+    Type: AWS::CloudFormation::Stack
     Properties:
-      LoadBalancerArn: !Ref BackendLoadBalancer
-      Protocol: HTTP
-      Port: 80
-      DefaultActions:
-        - TargetGroupArn: !Ref BackendLoadBalancerTargetGroup
-          Type: forward
-
-  BackendLoadBalancerTargetGroup:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Properties:
-      HealthCheckEnabled: true
-      HealthCheckIntervalSeconds: 30
-      HealthCheckPath: /api/health
-      HealthCheckPort: 80
-      HealthCheckProtocol: HTTP
-      HealthCheckTimeoutSeconds: 5
-      HealthyThresholdCount: 3
-      UnhealthyThresholdCount: 5
-      TargetType: instance
-      Protocol: HTTP
-      Port: 80
-      VpcId:
-        Fn::ImportValue: !Sub ${VpcStackName}-VpcId
-
-  ################################################################################
-  #                          Backend Auto Scaling Group                          #
-  ################################################################################
-
-  BackendAutoScalingGroup:
-    Type: AWS::AutoScaling::AutoScalingGroup
-    CreationPolicy:
-      ResourceSignal:
-        Count: 1
-        Timeout: PT5M
-    Properties:
-      LaunchTemplate:
-        LaunchTemplateId: !Ref BackendServerLaunchTemplate
-        Version: !GetAtt BackendServerLaunchTemplate.LatestVersionNumber
-      DesiredCapacity: 1
-      MinSize: 0
-      MaxSize: 5
-      TargetGroupARNs:
-        - !Ref BackendLoadBalancerTargetGroup
-      HealthCheckType: ELB
-      VPCZoneIdentifier:
-        - Fn::ImportValue: !Sub ${VpcStackName}-PublicSubnet1 # TODO: Should use private subnet instead when bastion-host/jump server is finished
-        - Fn::ImportValue: !Sub ${VpcStackName}-PublicSubnet2 # TODO: Should use private subnet instead when bastion-host/jump server is finished
-      NotificationConfiguration:
-        TopicARN: !Ref BackendAutoScalingGroupTopic
-        NotificationTypes:
-          - autoscaling:EC2_INSTANCE_LAUNCH
-          - autoscaling:EC2_INSTANCE_LAUNCH_ERROR
-          - autoscaling:EC2_INSTANCE_TERMINATE
-          - autoscaling:EC2_INSTANCE_TERMINATE_ERROR
-
-  BackendServerLaunchTemplate:
-    Type: AWS::EC2::LaunchTemplate
-    Metadata:
-      AWS::CloudFormation::Init:
-        config:
-          packages:
-            yum:
-              gcc-c++: []
-              make: []
-              git: []
-          commands:
-            01_install_nodejs:
-              command: |
-                curl -sL https://rpm.nodesource.com/setup_16.x | sudo bash -
-                yum install nodejs -y
-            02_clone_repository:
-              command: git clone https://github.com/ahmednmourad/nodejs-three-tier-app.git /home/ec2-user/nodejs-three-tier-app || { echo "Failed to clone repository" ; exit 1; }
-            03_install_dependencies:
-              command: npm ci --omit=dev || { echo "Failed to install dependencies" ; exit 1; }
-              cwd: /home/ec2-user/nodejs-three-tier-app/backend
-            04_create_env_file:
-              command: !Sub |
-                cat <<EOF > .env.production
-                PORT=80
-                DB_HOSTNAME=${DbHostname}
-                DB_USERNAME=${DbUsername}
-                DB_PASSWORD=${DbPassword}
-                DB_NAME=${DbName}
-                SENDINBLUE_API_KEY=${EmailApiKey}
-                MAIL_FROM_NAME=${MailFromName}
-                MAIL_FROM_EMAIL=${MailFromEmail}
-                ACCESS_TOKEN_SECRET_KEY=${AccessTokenSecretKey}
-                S3_BUCKET_NAME=${S3BucketName}
-                EOF
-              cwd: /home/ec2-user/nodejs-three-tier-app/backend
-            05_install_pm2:
-              command: npm install pm2 -g || { echo "Failed to install PM2" ; exit 1; }
-            06_start_application:
-              command: PM2_HOME="/root/.pm2" pm2 start npm --name "nodejs-three-tier-app" -- run production --watch || { echo "Failed to start the application" ; exit 1; }
-              cwd: /home/ec2-user/nodejs-three-tier-app/backend
-    Properties:
-      LaunchTemplateData:
+      TemplateURL: ./ec2-auto-scaling.yaml
+      Parameters:
+        VpcStackName: !Ref VpcStackName
+        LoadBalancerTargetGroups: !GetAtt LoadBalancersStack.Outputs.BackendLoadBalancerTargetGroupArn
+        KeyName: !Ref BackendKeyName
         InstanceType: !Ref InstanceType
-        KeyName: !Ref KeyName
-        SecurityGroupIds:
-          - Fn::ImportValue: !Sub ${VpcStackName}-BackendServerSecurityGroup
-        IamInstanceProfile:
-          Arn: !GetAtt BackendServerInstanceProfile.Arn
-        ImageId: !FindInMap [AmiMap, !Ref AWS::Region, Ami]
-        UserData:
-          Fn::Base64: !Sub |
-            #!/bin/bash
+        DbHostname: !Ref DbHostname
+        DbName: !Ref DbName
+        DbUsername: !Ref DbUsername
+        DbPassword: !Ref DbPassword
+        EmailApiKey: !Ref EmailApiKey
+        MailFromName: !Ref MailFromName
+        MailFromEmail: !Ref MailFromEmail
+        AccessTokenSecretKey: !Ref AccessTokenSecretKey
+        S3BucketName: !Ref S3BucketName
+        OperatorEmail: !Ref OperatorEmail
 
-            # Update the AWS CloudFormation helper scripts
-            yum update -y aws-cfn-bootstrap
-
-            # Run cfn-init to fetch and process AWS::CloudFormation::Init metadata
-            /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource BackendServerLaunchTemplate --region ${AWS::Region}
-
-            # Check the exit status of the previous command and send a signal to CloudFormation with the result
-            # If cfn-init fails, the CloudFormation stack creation/update will also fail
-            /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource BackendAutoScalingGroup --region ${AWS::Region}
-
-  BackendServerInstanceProfile:
-    Type: AWS::IAM::InstanceProfile
+  BastionHostStack:
+    Type: AWS::CloudFormation::Stack
     Properties:
-      Path: /
-      Roles:
-        - !Ref BackendServerS3Role
-
-  BackendServerS3Role:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: "Allow"
-            Principal:
-              Service: ec2.amazonaws.com
-            Action: sts:AssumeRole
-      Path: /
-      Policies:
-        - PolicyName: s3-policy
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - "s3:PutObject"
-                Resource: !Sub arn:aws:s3:::${S3BucketName}
-
-  BackendAutoScalingGroupTargetScalingPolicy:
-    Type: AWS::AutoScaling::ScalingPolicy
-    Properties:
-      AutoScalingGroupName: !Ref BackendAutoScalingGroup
-      PolicyType: TargetTrackingScaling
-      TargetTrackingConfiguration:
-        PredefinedMetricSpecification:
-          PredefinedMetricType: ASGAverageCPUUtilization
-        TargetValue: 70 # Scale out if CPU utilization exceeds 70%
-
-  BackendAutoScalingGroupTopic:
-    Type: AWS::SNS::Topic
-    Properties:
-      DisplayName: Backend Auto Scaling Group Topic
-      Subscription:
-        - Endpoint: !Ref OperatorEmail
-          Protocol: email
+      TemplateURL: ./bastion-host.yaml
+      Parameters:
+        VpcStackName: !Ref VpcStackName
+        KeyName: !Ref BastionHostKeyName
 
 Outputs:
   BackendLoadBalancerUrl:
     Description: The URL of the app
-    Value: !Join ["", ["http://", !GetAtt BackendLoadBalancer.DNSName]]
+    Value: !GetAtt LoadBalancersStack.Outputs.BackendLoadBalancerUrl
