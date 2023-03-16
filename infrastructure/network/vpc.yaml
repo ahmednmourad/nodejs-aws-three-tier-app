@@ -170,7 +170,7 @@ Resources:
       VpcId: !Ref Vpc
       Tags:
         - Key: Name
-          Value: !Sub ${VpcName}-private-route-table-0
+          Value: !Sub ${VpcName}-private-route-table-1
   DefaultPrivateRoute1:
     Type: AWS::EC2::Route
     Condition: CreateOneNatGateway
@@ -190,7 +190,7 @@ Resources:
       VpcId: !Ref Vpc
       Tags:
         - Key: Name
-          Value: !Sub ${VpcName}-private-route-table-1
+          Value: !Sub ${VpcName}-private-route-table-2
   DefaultPrivateRoute2:
     Type: AWS::EC2::Route
     Condition: CreateOneNatGateway
