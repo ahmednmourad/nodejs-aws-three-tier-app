@@ -2,7 +2,7 @@ import { S3Client } from "@aws-sdk/client-s3"
 import multer from "multer"
 import multerS3 from "multer-s3"
 import { nanoid } from "nanoid"
-import config from "../config/index.js"
+import config from "../../config/index.js"
 
 const s3 = new S3Client()
 const s3Storage = multerS3({
@@ -19,6 +19,7 @@ const s3Storage = multerS3({
   contentType: multerS3.AUTO_CONTENT_TYPE,
 })
 
+// You must create a folder called 'uploads' before you can use the local storage.
 const localStorage = multer.diskStorage({
   destination: (req, res, cb) => {
     cb(null, "src/uploads")

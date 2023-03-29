@@ -1,6 +1,7 @@
 import { Router } from "express"
 import { upload as uploadController } from "./upload.controller.js"
-import { isAuth, upload as uploadMiddleware } from "../../middlewares/index.js"
+import { upload as uploadMiddleware } from "./upload.middleware.js"
+import { isAuth } from "../../middlewares/index.js"
 
 const router = Router()
 
