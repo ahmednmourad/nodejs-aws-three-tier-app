@@ -357,7 +357,7 @@ Security groups act as firewalls at the instance level, to control inbound and o
 <details>
 	<summary>Diagram</summary>
 
-![VPC](images/vpc1.png "VPC")
+![VPC](images/vpc.png "VPC")
 
 </details>
 
