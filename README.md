@@ -29,7 +29,7 @@ It also builds an infrastructure that creates all the necessary components to ru
     - [`server.js`](#serverjs)
 
 - [Infrastructure](#infrastructure)
-  - [Diagram](#overview-1)
+  - [Diagram](#diagram)
   - [Components](#components)
     - [Network](#network)
     - [Database](#database)
@@ -303,7 +303,7 @@ This file is basically be the entry point of the Node.js app
 
 ## Diagram
 
-![VPC](images/infrastructure.jpg "VPC")
+![Infrastructure](images/infrastructure.jpg "Infrastructure")
 
 ## Components
 
@@ -357,7 +357,7 @@ Security groups act as firewalls at the instance level, to control inbound and o
 <details>
 	<summary>Diagram</summary>
 
-![VPC](images/vpc.png "VPC")
+![VPC](images/vpc1.png "VPC")
 
 </details>
 
