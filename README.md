@@ -3,8 +3,6 @@
 This is a three-tier application with a simple backend that implements authentication, user management, upload, health features.
 It also builds an infrastructure that creates all the necessary components to run the application on AWS, including a load balancer, EC2 instances, and an RDS instance, etc.
 
-</br>
-
 # Table of Contents
 
 - [Getting Started](#getting-started)
@@ -17,16 +15,16 @@ It also builds an infrastructure that creates all the necessary components to ru
   - [Project Structure](#project-structure)
 
     - [API](#api)
-    - [`Config`](#config)
-    - [`Emails`](#emails)
-    - [`Loaders`](#loaders)
-    - [`Middlewares`](#middlewares)
-    - [`Migrations`](#migrations)
-    - [`Models`](#models)
-    - [`Scripts`](#scripts)
-    - [`Utils`](#utils)
-    - [`app.js`](#appjs)
-    - [`server.js`](#serverjs)
+    - [Config](#config)
+    - [Emails](#emails)
+    - [Loaders](#loaders)
+    - [Middlewares](#middlewares)
+    - [Migrations](#migrations)
+    - [Models](#models)
+    - [Scripts](#scripts)
+    - [Utils](#utils)
+    - [app.js](#appjs)
+    - [server.js](#serverjs)
 
 - [Infrastructure](#infrastructure)
   - [Diagram](#diagram)
@@ -36,8 +34,6 @@ It also builds an infrastructure that creates all the necessary components to ru
     - [Storage](#storage)
     - [Application](#application)
 
-</br>
-
 # Getting Started
 
 ## Installation
@@ -46,16 +42,16 @@ If you haven't already done so you first need to:
 
 1. Clone the repo
 
-   ```console
+   ```
    git clone https://github.com/ahmednmourad/nodejs-three-tier-app.git
    ```
 
 2. Install NPM packages
 
-   You'll need to navigate to the backend folder first
+   Before Installing the packages, you'll need to navigate to the backend folder first, after doing that run the following command:
 
-   ```shell
-   cd backend && npm install
+   ```
+   npm install
    ```
 
 3. Set environment variables
@@ -68,11 +64,9 @@ If you haven't already done so you first need to:
 5. Create an S3 bucket for saving photos if you wish to deploy the app (optional)
 6. Run database migration script to startup the database
 
-   ```bash
+   ```
    npm run migrate
    ```
-
-</br>
 
 ## Deployment
 
@@ -122,10 +116,10 @@ To Deploy the application on AWS, you'll have to:
 - Since this stack contains nested stacks we'll have to use `aws cloudformation package` first to upload the local artifacts (local paths) that the CloudFormation template references.
 
   ```bash
-  	aws cloudformation package \
-  	--template-file database/main.yaml \
-  	--s3-bucket=ahmednmourad-nested-stacks-001 \
-  	--output-template-file database/main-packaged.yaml
+  aws cloudformation package \
+  --template-file database/main.yaml \
+  --s3-bucket=ahmednmourad-nested-stacks-001 \
+  --output-template-file database/main-packaged.yaml
   ```
 
 - After we successfully uploaded the local artifacts with the `package` command we can now deploy the package stack which is now called `main-packaged.yaml`
@@ -231,11 +225,11 @@ Here's an example of what's included in the user folder.
 
 api/ 📁
 └── user/ 📁
-├── user.controller.js 📄
-├── user.route.js 📄
-├── user.service.js 📄
-└── user.test.js 📄
-├── user.validation.js 📄
+  ├── user.controller.js 📄
+  ├── user.route.js 📄
+  ├── user.service.js 📄
+  └── user.test.js 📄
+  ├── user.validation.js 📄
 
 ```
 
@@ -247,13 +241,13 @@ If I need to support versioning I can just rename user to userV1 or maybe struct
 
 api/ 📁
 └── v1/ 📁
-└── auth/ 📁
-└── user/ 📁
-└── health/ 📁
-└── upload/ 📁
+  └── auth/ 📁
+  └── user/ 📁
+  └── health/ 📁
+  └── upload/ 📁
 └── v2/ 📁
-└── user/ 📁
-...
+  └── user/ 📁
+  ...
 
 ```
 
@@ -296,8 +290,6 @@ This file contains only the API declaration is separated from the network relate
 ### `server.js`
 
 This file is basically be the entry point of the Node.js app
-
-</br>
 
 # Infrastructure
 
@@ -361,8 +353,6 @@ Security groups act as firewalls at the instance level, to control inbound and o
 
 </details>
 
-</br>
-
 ### **Database**
 
 - `rds.yaml`
@@ -385,15 +375,11 @@ Security groups act as firewalls at the instance level, to control inbound and o
 
   This is the parent template which deploys all the nested templates (do not deploy nested stacks separately) including rds.yaml, cloudwatch-alarms.yaml, event-notifications.yaml, and alarms-topic.yaml.
 
-</br>
-
 ### **Storage**
 
 - `s3.yaml`
 
   This template creates an S3 bucket.
-
-</br>
 
 ### **Application**
 
