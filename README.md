@@ -289,7 +289,7 @@ This file contains only the API declaration is separated from the network relate
 
 ### `server.js`
 
-This file is basically be the entry point of the Node.js app
+This file is basically the entry point of the Node.js app
 
 # Infrastructure
 
